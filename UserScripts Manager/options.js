@@ -1,3 +1,7 @@
+// Firefox exposes the promise-based `browser` namespace, Chromium exposes
+// `chrome` (promise-based in MV3 when no callback is passed). Either works below.
+const ext = (typeof browser !== "undefined" && browser.runtime) ? browser : chrome;
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Elements
     const debugToggle = document.getElementById('debug-toggle');
@@ -19,16 +23,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- 1. Debug Mode Setup ---
-    const { debugMode = false } = await chrome.storage.local.get('debugMode');
+    const { debugMode = false } = await ext.storage.local.get('debugMode');
     debugToggle.checked = debugMode;
 
     debugToggle.addEventListener('change', async (e) => {
-        await chrome.storage.local.set({ debugMode: e.target.checked });
+        await ext.storage.local.set({ debugMode: e.target.checked });
     });
 
     // --- 2. Export Setup ---
     exportBtn.addEventListener('click', async () => {
-        const { scripts = [] } = await chrome.storage.local.get('scripts');
+        const { scripts = [] } = await ext.storage.local.get('scripts');
         
         if (scripts.length === 0) {
             showStatus('No scripts found to export.', true);
@@ -69,7 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error('Invalid file format. Expected an array of scripts.');
                 }
 
-                const { scripts = [] } = await chrome.storage.local.get('scripts');
+                const { scripts = [] } = await ext.storage.local.get('scripts');
                 const existingNames = new Set(scripts.map(s => s.name));
                 
                 let importedCount = 0;
@@ -108,7 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
 
                 // Save merged scripts back to storage
-                await chrome.storage.local.set({ scripts });
+                await ext.storage.local.set({ scripts });
 
                 // Construct success message
                 let msg = `Successfully imported ${importedCount} script(s).`;

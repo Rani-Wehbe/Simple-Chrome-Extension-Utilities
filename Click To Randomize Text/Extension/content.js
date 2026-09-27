@@ -2,6 +2,10 @@
 if (typeof window.textRandomizerInjected === 'undefined') {
     window.textRandomizerInjected = true;
 
+    // Firefox exposes the promise-based `browser` namespace, Chromium exposes
+    // `chrome` (promise-based in MV3 when no callback is passed).
+    const ext = (typeof browser !== "undefined" && browser.runtime) ? browser : chrome;
+
     // Character set for randomization (letters, numbers - NO space here)
     const wordChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -296,7 +300,7 @@ if (typeof window.textRandomizerInjected === 'undefined') {
         if (event.key === 'Escape') {
             deactivate();
             // Notify the background script to update the toggle state
-            chrome.runtime.sendMessage({ action: "deactivated_by_escape" });
+            void ext.runtime.sendMessage({ action: "deactivated_by_escape" });
         } else if (event.ctrlKey && event.key.toLowerCase() === 'z') {
             event.preventDefault();
             if (historyStack.length > 0) {
@@ -322,14 +326,13 @@ if (typeof window.textRandomizerInjected === 'undefined') {
         }
     };
 
-    function activate() {
+    async function activate() {
         if (window.textRandomizerActive) return;
         window.textRandomizerActive = true;
 
         // Fetch initial blur setting when activating
-        chrome.storage.sync.get('blurEnabled', (data) => {
-            shouldBlur = !!data.blurEnabled;
-        });
+        const data = await ext.storage.sync.get('blurEnabled');
+        shouldBlur = !!data.blurEnabled;
 
         document.addEventListener('click', handleInteraction, true);
         document.addEventListener('keydown', handleKeyDown, true);
@@ -343,16 +346,16 @@ if (typeof window.textRandomizerInjected === 'undefined') {
         console.log("Text Randomizer deactivated.");
     }
 
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    ext.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === "activate") {
-            activate();
+            activate().catch((err) => console.error("Text Randomizer activation failed:", err));
         } else if (request.action === "deactivate") {
             deactivate();
         }
     });
 
     // Listen for storage changes to update blur setting live, even if popup is closed
-    chrome.storage.onChanged.addListener((changes, namespace) => {
+    ext.storage.onChanged.addListener((changes, namespace) => {
         if (namespace === 'sync' && changes.blurEnabled) {
             shouldBlur = !!changes.blurEnabled.newValue;
         }

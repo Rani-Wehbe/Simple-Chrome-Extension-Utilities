@@ -1,19 +1,22 @@
 // options.js
 
-// Restores options from chrome.storage
-function restoreOptions() {
-  chrome.storage.sync.get(['whitelist', 'whitelistMetadata', 'allowedChars'], (data) => {
-    const whitelist = data.whitelist || [];
-    const metadata = data.whitelistMetadata || {};
-    const allowedChars = data.allowedChars || '';
+// Firefox exposes the promise-based `browser` namespace, Chromium exposes
+// `chrome` (promise-based in MV3 when no callback is passed). Either works below.
+const ext = (typeof browser !== "undefined" && browser.runtime) ? browser : chrome;
 
-    renderWhitelist(whitelist, metadata);
+// Restores options from storage
+async function restoreOptions() {
+  const data = await ext.storage.sync.get(['whitelist', 'whitelistMetadata', 'allowedChars']);
+  const whitelist = data.whitelist || [];
+  const metadata = data.whitelistMetadata || {};
+  const allowedChars = data.allowedChars || '';
 
-    // Initialize Allowed Characters UI
-    const charInput = document.getElementById('allowed-chars-input');
-    charInput.value = allowedChars;
-    renderAllowedCharsPreview(allowedChars);
-  });
+  renderWhitelist(whitelist, metadata);
+
+  // Initialize Allowed Characters UI
+  const charInput = document.getElementById('allowed-chars-input');
+  charInput.value = allowedChars;
+  renderAllowedCharsPreview(allowedChars);
 }
 
 // Update the visual preview of allowed characters
@@ -28,7 +31,7 @@ function renderAllowedCharsPreview(chars) {
 }
 
 // Saves the allowed characters
-function saveAllowedChars() {
+async function saveAllowedChars() {
   const charInput = document.getElementById('allowed-chars-input');
   // Remove all whitespace (spaces, tabs, newlines)
   const rawChars = charInput.value.replace(/\s/g, '');
@@ -40,15 +43,14 @@ function saveAllowedChars() {
   charInput.value = uniqueChars;
   renderAllowedCharsPreview(uniqueChars);
 
-  chrome.storage.sync.set({
+  await ext.storage.sync.set({
     allowedChars: uniqueChars
-  }, () => {
-    const status = document.getElementById('save-status');
-    status.style.opacity = '1';
-    setTimeout(() => {
-      status.style.opacity = '0';
-    }, 1500);
   });
+  const status = document.getElementById('save-status');
+  status.style.opacity = '1';
+  setTimeout(() => {
+    status.style.opacity = '0';
+  }, 1500);
 }
 
 // Renders the list of whitelisted domains
@@ -120,7 +122,7 @@ function renderWhitelist(whitelist, metadata) {
 }
 
 // Removes a domain from the whitelist
-function removeDomain(event) {
+async function removeDomain(event) {
   const domainToRemove = event.target.dataset.domain;
   
   // Lock the table and column widths to prevent layout shift
@@ -133,33 +135,31 @@ function removeDomain(event) {
     cell.style.width = cell.offsetWidth + 'px';
   });
   
-  chrome.storage.sync.get(['whitelist', 'whitelistMetadata'], (data) => {
-    let whitelist = data.whitelist || [];
-    let metadata = data.whitelistMetadata || {};
+  const data = await ext.storage.sync.get(['whitelist', 'whitelistMetadata']);
+  let whitelist = data.whitelist || [];
+  let metadata = data.whitelistMetadata || {};
 
-    // Remove from whitelist array
-    whitelist = whitelist.filter(domain => domain !== domainToRemove);
+  // Remove from whitelist array
+  whitelist = whitelist.filter(domain => domain !== domainToRemove);
 
-    // Remove from metadata object
-    if (metadata[domainToRemove]) {
-      delete metadata[domainToRemove];
-    }
+  // Remove from metadata object
+  if (metadata[domainToRemove]) {
+    delete metadata[domainToRemove];
+  }
 
-    // Save the updated lists
-    chrome.storage.sync.set({
-      whitelist: whitelist,
-      whitelistMetadata: metadata
-    }, () => {
-      // Re-render the list
-      renderWhitelist(whitelist, metadata);
-    });
+  // Save the updated lists
+  await ext.storage.sync.set({
+    whitelist: whitelist,
+    whitelistMetadata: metadata
   });
+  // Re-render the list
+  renderWhitelist(whitelist, metadata);
 }
 
 // Initialize version button and changelog modal
 function initVersionChangelog() {
   // Get version from manifest
-  const manifest = chrome.runtime.getManifest();
+  const manifest = ext.runtime.getManifest();
   const versionNumber = document.getElementById('version-number');
   if (versionNumber) {
     versionNumber.textContent = manifest.version;
@@ -183,7 +183,7 @@ function initVersionChangelog() {
 
 // Listen for when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  restoreOptions();
+  restoreOptions().catch((err) => console.error("Failed to restore options:", err));
   initVersionChangelog();
 
   // Event listeners for Allowed Characters

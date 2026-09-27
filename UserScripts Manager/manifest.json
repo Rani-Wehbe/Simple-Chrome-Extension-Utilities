@@ -4,9 +4,11 @@
   "version": "1.4",
   "description": "A simple manager to run custom JavaScript on websites.",
   "permissions": ["storage", "scripting", "activeTab", "userScripts", "webNavigation"],
+  "optional_permissions": ["userScripts"],
   "host_permissions": ["<all_urls>"],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "action": {
     "default_popup": "popup.html"

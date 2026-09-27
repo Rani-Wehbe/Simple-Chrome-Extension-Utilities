@@ -1,4 +1,9 @@
 // popup.js
+
+// Firefox exposes the promise-based `browser` namespace, Chromium exposes
+// `chrome` (promise-based in MV3 when no callback is passed). Either works below.
+const ext = (typeof browser !== "undefined" && browser.runtime) ? browser : chrome;
+
 document.addEventListener('DOMContentLoaded', () => {
     const addScriptBtn = document.getElementById('add-script-btn');
     const newScriptCodeEl = document.getElementById('new-script-code');
@@ -52,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Renders all scripts from storage into the UI.
      */
     const renderScripts = async () => {
-        const { scripts = [] } = await chrome.storage.local.get('scripts');
+        const { scripts = [] } = await ext.storage.local.get('scripts');
         scriptListEl.innerHTML = ''; // Clear current list
 
         if (scripts.length === 0) {
@@ -140,9 +145,9 @@ document.addEventListener('DOMContentLoaded', () => {
             enabled: true,
         };
 
-        const { scripts = [] } = await chrome.storage.local.get('scripts');
+        const { scripts = [] } = await ext.storage.local.get('scripts');
         scripts.push(newScript);
-        await chrome.storage.local.set({ scripts });
+        await ext.storage.local.set({ scripts });
 
         newScriptCodeEl.value = '';
         addScriptBtn.disabled = false;
@@ -160,20 +165,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!scriptDiv) return;
 
         const scriptId = scriptDiv.dataset.id;
-        const { scripts = [] } = await chrome.storage.local.get('scripts');
+        const { scripts = [] } = await ext.storage.local.get('scripts');
         const scriptIndex = scripts.findIndex(s => s.id === scriptId);
         if (scriptIndex === -1) return;
 
         // Handle delete
         if (e.target.closest('.delete-btn')) {
             scripts.splice(scriptIndex, 1);
-            await chrome.storage.local.set({ scripts });
+            await ext.storage.local.set({ scripts });
             await renderScripts();
         }
         // Handle toggle
         else if (e.target.closest('.toggle-checkbox')) {
             scripts[scriptIndex].enabled = e.target.checked;
-            await chrome.storage.local.set({ scripts });
+            await ext.storage.local.set({ scripts });
         }
         // Handle edit
         else if (e.target.closest('.edit-btn')) {
@@ -186,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} scriptId - The ID of the script to edit.
      */
     const handleOpenEditModal = async (scriptId) => {
-        const { scripts = [] } = await chrome.storage.local.get('scripts');
+        const { scripts = [] } = await ext.storage.local.get('scripts');
         const scriptToEdit = scripts.find(s => s.id === scriptId);
         if (scriptToEdit) {
             scriptIdToEdit = scriptId;
@@ -233,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const { scripts = [] } = await chrome.storage.local.get('scripts');
+        const { scripts = [] } = await ext.storage.local.get('scripts');
         const scriptIndex = scripts.findIndex(s => s.id === scriptIdToEdit);
 
         if (scriptIndex !== -1) {
@@ -244,7 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scripts[scriptIndex].grants = meta.grants;
             scripts[scriptIndex].runAt = meta.runAt;
             scripts[scriptIndex].code = updatedCode;
-            await chrome.storage.local.set({ scripts });
+            await ext.storage.local.set({ scripts });
 
             editModal.classList.add('hidden');
             scriptIdToEdit = null;
@@ -257,6 +262,36 @@ document.addEventListener('DOMContentLoaded', () => {
         saveEditBtn.textContent = 'Save Changes';
     };
     
+    // --- User Scripts Permission ---
+    // Firefox only hands out `userScripts` at runtime (optional permission),
+    // and Chromium hides the API until "Allow user scripts" is flipped on for
+    // the extension. Either way scripts can't run until the namespace shows
+    // up, so offer a button that requests it when it's missing.
+    const permCard = document.getElementById('userscripts-permission-card');
+    const permText = document.getElementById('userscripts-permission-text');
+    const permBtn = document.getElementById('request-userscripts-btn');
+
+    const refreshPermissionCard = async () => {
+        if (ext.userScripts) {
+            permCard.classList.add('hidden');
+            return;
+        }
+        permCard.classList.remove('hidden');
+    };
+
+    permBtn.addEventListener('click', async () => {
+        try {
+            const granted = await ext.permissions.request({ permissions: ['userScripts'] });
+            if (granted && ext.userScripts) {
+                permCard.classList.add('hidden');
+                return;
+            }
+            permText.textContent = 'Still not enabled. In Chrome/Edge, open chrome://extensions, find this extension, and turn on "Allow user scripts". In Firefox, accept the permission prompt and try again.';
+        } catch (err) {
+            permText.textContent = `Could not request the permission: ${err.message}`;
+        }
+    });
+
     // --- Initial Setup ---
     addScriptBtn.addEventListener('click', handleAddScript);
     scriptListEl.addEventListener('click', handleListClick);
@@ -266,6 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         scriptIdToEdit = null;
     });
 
+    refreshPermissionCard();
     renderScripts();
 });
 

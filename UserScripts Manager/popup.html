@@ -221,6 +221,15 @@
     <div class="container">
         <h1 class="title">Userscript Manager</h1>
 
+        <!-- Shown when the userScripts API is not available yet -->
+        <div id="userscripts-permission-card" class="card hidden">
+            <h2 class="subtitle">Permission Needed</h2>
+            <p class="description" id="userscripts-permission-text">This extension needs the userScripts permission before it can run your scripts. Click below to grant it.</p>
+            <button id="request-userscripts-btn" class="button">
+                Enable User Scripts
+            </button>
+        </div>
+
         <!-- Add New Script Section -->
         <div class="card">
             <h2 class="subtitle">Add New Script</h2>

@@ -1,6 +1,10 @@
 // content.js
 
 (function () {
+    // Firefox exposes the promise-based `browser` namespace, Chromium exposes
+    // `chrome` (promise-based in MV3 when no callback is passed).
+    const ext = (typeof browser !== "undefined" && browser.runtime) ? browser : chrome;
+
     // 1. Basic Exclusions
     // Skip iframes (only run on top-level window)
     if (window.self !== window.top) return;
@@ -12,49 +16,51 @@
     const isIDN = (/[^\u0000-\u007f]/.test(hostname) || hostname.toLowerCase().includes('xn--'));
 
     if (isIDN) {
+        checkAndRedirect().catch((err) => console.error("Unicode Domain Warning failed:", err));
+    }
+
+    async function checkAndRedirect() {
         const originalURL = window.location.href;
         // 3. Check Whitelists
-        chrome.storage.sync.get(['whitelist', 'allowedChars'], (syncData) => {
-            const whitelist = syncData.whitelist || [];
-            const allowedChars = syncData.allowedChars || '';
+        const syncData = await ext.storage.sync.get(['whitelist', 'allowedChars']);
+        const whitelist = syncData.whitelist || [];
+        const allowedChars = syncData.allowedChars || '';
 
-            // A. Permanent Whitelist Check
-            if (whitelist.includes(hostname)) return;
+        // A. Permanent Whitelist Check
+        if (whitelist.includes(hostname)) return;
 
-            // B. Allowed Characters Check
-            if (allowedChars) {
-                // accessing the global punycode object loaded by punycode.js
-                const unicodeHostname = window.punycode ? window.punycode.toUnicode(hostname) : hostname;
+        // B. Allowed Characters Check
+        if (allowedChars) {
+            // accessing the global punycode object loaded by punycode.js
+            const unicodeHostname = window.punycode ? window.punycode.toUnicode(hostname) : hostname;
 
-                const isAllowed = [...unicodeHostname].every(char => {
-                    return char.codePointAt(0) <= 127 || allowedChars.includes(char);
-                });
-
-                if (isAllowed) return;
-            }
-
-            // C. Temporary "Proceed" Check (Session Logic)
-            chrome.storage.local.get(['tempDismissed', 'sessionToken'], (localData) => {
-                // Get the base URL for the warning page to extract the Dynamic ID
-                const warningPageUrl = chrome.runtime.getURL('warning.html');
-                const currentSessionToken = warningPageUrl;
-
-                const storedToken = localData.sessionToken;
-                let dismissed = localData.tempDismissed || [];
-
-                // If the tokens don't match, the browser restarted. Wipe the session list.
-                if (storedToken !== currentSessionToken) {
-                    dismissed = [];
-                }
-
-                // If currently dismissed for this valid session, stop here.
-                if (dismissed.includes(hostname)) return;
-
-                // 4. Redirect to Warning Page
-                // We use the base URL we already grabbed and append the target
-                const finalRedirectUrl = warningPageUrl + `?target=${encodeURIComponent(originalURL)}`;
-                window.location.replace(finalRedirectUrl);
+            const isAllowed = [...unicodeHostname].every(char => {
+                return char.codePointAt(0) <= 127 || allowedChars.includes(char);
             });
-        });
+
+            if (isAllowed) return;
+        }
+
+        // C. Temporary "Proceed" Check (Session Logic)
+        const localData = await ext.storage.local.get(['tempDismissed', 'sessionToken']);
+        // Get the base URL for the warning page to extract the Dynamic ID
+        const warningPageUrl = ext.runtime.getURL('warning.html');
+        const currentSessionToken = warningPageUrl;
+
+        const storedToken = localData.sessionToken;
+        let dismissed = localData.tempDismissed || [];
+
+        // If the tokens don't match, the browser restarted. Wipe the session list.
+        if (storedToken !== currentSessionToken) {
+            dismissed = [];
+        }
+
+        // If currently dismissed for this valid session, stop here.
+        if (dismissed.includes(hostname)) return;
+
+        // 4. Redirect to Warning Page
+        // We use the base URL we already grabbed and append the target
+        const finalRedirectUrl = warningPageUrl + `?target=${encodeURIComponent(originalURL)}`;
+        window.location.replace(finalRedirectUrl);
     }
 })();

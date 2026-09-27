@@ -1,5 +1,9 @@
 // warning.js
 
+// Firefox exposes the promise-based `browser` namespace, Chromium exposes
+// `chrome` (promise-based in MV3 when no callback is passed). Either works below.
+const ext = (typeof browser !== "undefined" && browser.runtime) ? browser : chrome;
+
 // --- Helper: Check if we are inside an iframe ---
 function isFramed() {
     try {
@@ -84,7 +88,7 @@ if (window.history.length <= 1) {
 }
 
 // 2. Whitelist (Permanent)
-document.getElementById('whitelist-btn').onclick = () => {
+document.getElementById('whitelist-btn').onclick = async () => {
     // --- SAFE MODE CHECK ---
     if (isFramed()) {
         const userConfirmed = confirm(
@@ -97,29 +101,25 @@ document.getElementById('whitelist-btn').onclick = () => {
     }
     // -----------------------
 
-    chrome.storage.sync.get(['whitelist', 'whitelistMetadata'], (data) => {
-        const whitelist = data.whitelist || [];
-        const metadata = data.whitelistMetadata || {};
+    const data = await ext.storage.sync.get(['whitelist', 'whitelistMetadata']);
+    const whitelist = data.whitelist || [];
+    const metadata = data.whitelistMetadata || {};
 
-        if (!whitelist.includes(hostname)) {
-            whitelist.push(hostname);
-            metadata[hostname] = {
-                added: new Date().toISOString().split('T')[0],
-                title: 'Whitelisted via Warning'
-            };
+    if (!whitelist.includes(hostname)) {
+        whitelist.push(hostname);
+        metadata[hostname] = {
+            added: new Date().toISOString().split('T')[0],
+            title: 'Whitelisted via Warning'
+        };
 
-            chrome.storage.sync.set({ whitelist, whitelistMetadata: metadata }, () => {
-                // Use replace() so Warning Page is removed from history
-                window.location.replace(targetUrl);
-            });
-        } else {
-            window.location.replace(targetUrl);
-        }
-    });
+        await ext.storage.sync.set({ whitelist, whitelistMetadata: metadata });
+    }
+    // Use replace() so Warning Page is removed from history
+    window.location.replace(targetUrl);
 };
 
 // 3. Proceed (Temporary / Session Only)
-document.getElementById('proceed-btn').onclick = () => {
+document.getElementById('proceed-btn').onclick = async () => {
     // --- SAFE MODE CHECK ---
     if (isFramed()) {
         const userConfirmed = confirm(
@@ -132,32 +132,28 @@ document.getElementById('proceed-btn').onclick = () => {
     }
     // -----------------------
 
-    chrome.storage.local.get(['tempDismissed', 'sessionToken'], (data) => {
-        const currentSessionToken = chrome.runtime.getURL('warning.html');
+    const data = await ext.storage.local.get(['tempDismissed', 'sessionToken']);
+    const currentSessionToken = ext.runtime.getURL('warning.html');
 
-        let dismissed = data.tempDismissed || [];
-        let storedToken = data.sessionToken;
+    let dismissed = data.tempDismissed || [];
+    let storedToken = data.sessionToken;
 
-        // Check if session is stale
-        if (storedToken !== currentSessionToken) {
-            dismissed = [];
-            storedToken = currentSessionToken;
-        }
+    // Check if session is stale
+    if (storedToken !== currentSessionToken) {
+        dismissed = [];
+        storedToken = currentSessionToken;
+    }
 
-        if (!dismissed.includes(hostname)) {
-            dismissed.push(hostname);
+    if (!dismissed.includes(hostname)) {
+        dismissed.push(hostname);
 
-            chrome.storage.local.set({
-                tempDismissed: dismissed,
-                sessionToken: storedToken
-            }, () => {
-                // Use replace() so Warning Page is removed from history
-                window.location.replace(targetUrl);
-            });
-        } else {
-            window.location.replace(targetUrl);
-        }
-    });
+        await ext.storage.local.set({
+            tempDismissed: dismissed,
+            sessionToken: storedToken
+        });
+    }
+    // Use replace() so Warning Page is removed from history
+    window.location.replace(targetUrl);
 };
 
 // 4. "Why am I seeing this?" tooltip toggle

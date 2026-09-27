@@ -1,10 +1,16 @@
 // background.js
 
+// Firefox exposes the promise-based `browser` namespace, Chromium exposes
+// `chrome` (promise-based in MV3 when no callback is passed). Either works below.
+const ext = (typeof browser !== "undefined" && browser.runtime) ? browser : chrome;
+
 let isDebugMode = false;
 
 // Initialize debug mode state
-chrome.storage.local.get('debugMode', (data) => {
+ext.storage.local.get('debugMode').then((data) => {
     isDebugMode = !!data.debugMode;
+}).catch((err) => {
+    console.error('[Userscript Manager] Failed to read debug mode:', err);
 });
 
 // Custom logger for background.js
@@ -27,16 +33,24 @@ function getScriptWorld(code) {
 
 async function updateRegisteredScripts() {
     try {
-        if (chrome.userScripts.configureWorld) {
-            chrome.userScripts.configureWorld({
+        // The userScripts API only exists once the permission is granted and,
+        // on Chromium, the user flipped "Allow user scripts" for the extension.
+        // Firefox grants it via optional_permissions at runtime.
+        if (!ext.userScripts) {
+            debugLog('userScripts API not available yet, skipping registration.');
+            return;
+        }
+
+        if (ext.userScripts.configureWorld) {
+            ext.userScripts.configureWorld({
                 csp: "script-src 'self' 'unsafe-eval' 'unsafe-inline'; object-src 'self'"
             });
         }
 
-        const { scripts = [] } = await chrome.storage.local.get('scripts');
+        const { scripts = [] } = await ext.storage.local.get('scripts');
         const enabledScripts = scripts.filter(s => s.enabled);
 
-        await chrome.userScripts.unregister();
+        await ext.userScripts.unregister();
 
         const scriptsToRegister = enabledScripts.map(script => {
             let combinedCode = "";
@@ -76,7 +90,7 @@ async function updateRegisteredScripts() {
         });
 
         if (scriptsToRegister.length > 0) {
-            await chrome.userScripts.register(scriptsToRegister);
+            await ext.userScripts.register(scriptsToRegister);
         }
         
         // Log to extension background console
@@ -87,18 +101,38 @@ async function updateRegisteredScripts() {
 }
 
 // Listen for changes to scripts OR the debugMode toggle
-chrome.storage.onChanged.addListener((changes, area) => {
+ext.storage.onChanged.addListener((changes, area) => {
     if (area === 'local') {
         if (changes.debugMode !== undefined) {
             isDebugMode = changes.debugMode.newValue;
             // Re-register scripts to add/remove the in-page debug console.log
-            updateRegisteredScripts();
+            updateRegisteredScripts().catch((err) => {
+                console.error('[Userscript Manager] Error updating scripts:', err);
+            });
         }
         if (changes.scripts) {
-            updateRegisteredScripts();
+            updateRegisteredScripts().catch((err) => {
+                console.error('[Userscript Manager] Error updating scripts:', err);
+            });
         }
     }
 });
 
-chrome.runtime.onInstalled.addListener(updateRegisteredScripts);
-chrome.runtime.onStartup.addListener(updateRegisteredScripts);
+// When the userScripts permission gets granted at runtime (Firefox), or the
+// extension is installed/updated (scripts are wiped on update), register again.
+ext.permissions.onAdded.addListener(() => {
+    updateRegisteredScripts().catch((err) => {
+        console.error('[Userscript Manager] Error updating scripts:', err);
+    });
+});
+
+ext.runtime.onInstalled.addListener(() => {
+    updateRegisteredScripts().catch((err) => {
+        console.error('[Userscript Manager] Error updating scripts:', err);
+    });
+});
+ext.runtime.onStartup.addListener(() => {
+    updateRegisteredScripts().catch((err) => {
+        console.error('[Userscript Manager] Error updating scripts:', err);
+    });
+});
