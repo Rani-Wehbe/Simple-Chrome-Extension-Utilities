@@ -4,8 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
     <title>Userscript Manager</title>
     <style>
+        :root { color-scheme: light dark; }
         /* General Body and Font */
         body {
             width: 400px;
@@ -213,6 +215,20 @@
         }
         .button-secondary:hover {
             background-color: #d1d5db;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #111827; color: #e5e7eb; }
+            .title { color: #f3f4f6; }
+            .subtitle { color: #e5e7eb; }
+            .description { color: #9ca3af; }
+            .card, .script-item { background-color: #1f2937; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.4); }
+            .script-item-name { color: #e5e7eb; }
+            .textarea { background-color: #111827; border-color: #374151; color: #e5e7eb; }
+            .button-secondary { background-color: #374151; color: #e5e7eb; }
+            .button-secondary:hover { background-color: #4b5563; }
+            .edit-btn, .delete-btn { color: #6b7280; }
+            .modal-content { background: #1f2937; }
         }
     </style>
 </head>

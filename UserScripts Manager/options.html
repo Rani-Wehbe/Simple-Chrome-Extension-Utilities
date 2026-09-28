@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="color-scheme" content="dark light">
     <title>Options</title>
 <style>
+        :root { color-scheme: light dark; }
         /* Base Reset to fit inside browser modal safely */
         html, body {
             margin: 0;
@@ -111,6 +113,13 @@
             width: 100%;
         }
         .status-error { color: #ef4444; } /* Error red */
+
+        @media (prefers-color-scheme: dark) {
+            body { background-color: #111827; color: #e5e7eb; }
+            .setting-row, .setting-col { border-bottom-color: #374151; }
+            .button-secondary { background-color: #374151; color: #e5e7eb; }
+            .button-secondary:hover { background-color: #4b5563; }
+        }
     </style>
 </head>
 <body>
